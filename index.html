@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hub-viallon</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 3rem 1.25rem;
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: #f6f8fa; color: #1f2328;
+  }
+  main { max-width: 46rem; margin: 0 auto; }
+  h1 { font-size: 2rem; margin: 0 0 .25rem; letter-spacing: -.02em; }
+  h2 { font-size: 1.05rem; text-transform: uppercase; letter-spacing: .06em;
+       color: #59636e; margin: 2.5rem 0 .75rem; }
+  p.lead { color: #59636e; margin: 0 0 1rem; }
+  ul.cards { list-style: none; margin: 0; padding: 0; display: grid; gap: .75rem; }
+  ul.cards li a {
+    display: block; padding: 1rem 1.25rem; text-decoration: none;
+    background: #fff; border: 1px solid #d1d9e0; border-radius: 10px;
+    color: inherit; transition: border-color .12s ease, box-shadow .12s ease;
+  }
+  ul.cards li a:hover { border-color: #0969da; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+  ul.cards strong { display: block; font-size: 1.05rem; color: #0969da; }
+  ul.cards span { display: block; color: #59636e; font-size: .94rem; margin-top: .15rem; }
+  footer { margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid #d1d9e0;
+           font-size: .9rem; color: #59636e; }
+  a { color: #0969da; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #0d1117; color: #e6edf3; }
+    h2, p.lead, footer, ul.cards span { color: #9198a1; }
+    ul.cards li a { background: #151b23; border-color: #3d444d; }
+    ul.cards strong, a { color: #4493f8; }
+    footer { border-top-color: #3d444d; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>hub-viallon</h1>
+  <p class="lead">Personal hub for small artifacts — Flatpak repositories and other bits.</p>
+
+  <h2>Flatpak repositories</h2>
+  <ul class="cards">
+    <li>
+      <a href="amethyst/">
+        <strong>Amethyst Mod Manager</strong>
+        <span>Personal build of Amethyst, carrying the fix for the profile-conversion clone bug.</span>
+      </a>
+    </li>
+  </ul>
+
+  <footer>
+    <a href="https://github.com/aviallon/hub-viallon">Source on GitHub</a>
+  </footer>
+</main>
+</body>
+</html>

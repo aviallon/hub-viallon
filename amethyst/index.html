@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Amethyst Mod Manager — personal Flatpak build</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 3rem 1.25rem;
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: #f6f8fa; color: #1f2328;
+  }
+  main { max-width: 46rem; margin: 0 auto; }
+  h1 { font-size: 2rem; margin: 0 0 .25rem; letter-spacing: -.02em; }
+  h2 { font-size: 1.05rem; text-transform: uppercase; letter-spacing: .06em;
+       color: #59636e; margin: 2.5rem 0 .75rem; }
+  p.lead { color: #59636e; margin: 0 0 1rem; }
+  ul { padding-left: 1.25rem; }
+  li + li { margin-top: .35rem; }
+  pre {
+    margin: 0; padding: .9rem 1rem; overflow-x: auto;
+    background: #fff; border: 1px solid #d1d9e0; border-radius: 10px;
+    font: .88rem/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  code { font: .9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  footer { margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid #d1d9e0;
+           font-size: .9rem; color: #59636e; }
+  a { color: #0969da; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #0d1117; color: #e6edf3; }
+    h2, p.lead, footer { color: #9198a1; }
+    pre { background: #151b23; border-color: #3d444d; }
+    a { color: #4493f8; }
+    footer { border-top-color: #3d444d; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <p class="lead"><a href="../">hub-viallon</a></p>
+  <h1>Amethyst Mod Manager</h1>
+  <p class="lead">Personal Flatpak build of
+    <a href="https://github.com/ChrisDKN/Amethyst-Mod-Manager">Amethyst Mod Manager</a>.</p>
+
+  <p>This build carries the fix for the profile-conversion clone bug: converting a
+  profile to profile-specific mods cloned a mod that contained a Wine prefix, whose
+  <code>dosdevices/z:</code> points at <code>/</code>. Because the clone followed
+  symlinks it copied the entire host filesystem; and once that was fixed, the
+  directory-xattr copy aborted the conversion on bcachefs with
+  <code>ENOTEMPTY</code>.</p>
+
+  <h2>Install</h2>
+  <pre><code>flatpak remote-add --user --no-gpg-verify amethyst-aviallon \
+  https://aviallon.github.io/hub-viallon/amethyst/repo/
+flatpak install --user amethyst-aviallon io.github.Amethyst.ModManager</code></pre>
+  <p style="margin-top:.75rem">Or download
+    <a href="amethyst.flatpakrepo">amethyst.flatpakrepo</a> and open it with your
+    software centre.</p>
+
+  <h2>Notes</h2>
+  <ul>
+    <li>This repository is <strong>unsigned</strong>, hence <code>--no-gpg-verify</code>.
+        It is a personal build, not Flathub.</li>
+    <li>If you already have Amethyst from another remote, uninstall it first
+        <em>without</em> <code>--delete-data</code>, so your settings and game
+        instances survive, then install from this remote.</li>
+    <li>Branch: <code>stable</code>. Update with <code>flatpak update</code>. If the
+        app is masked, <code>flatpak mask --remove io.github.Amethyst.ModManager</code>
+        first, or updates will never arrive — even from here.</li>
+  </ul>
+
+  <h2>Repository files</h2>
+  <ul>
+    <li><a href="repo/summary">repo/summary</a> — Flatpak's repository index</li>
+    <li><a href="repo/config">repo/config</a> — OSTree repository configuration</li>
+    <li><a href="repo/refs/heads/app/io.github.Amethyst.ModManager/x86_64/stable">repo/refs/…/stable</a> — the published commit</li>
+  </ul>
+
+  <footer>
+    Built from <a href="https://github.com/ChrisDKN/Amethyst-Mod-Manager">ChrisDKN/Amethyst-Mod-Manager</a>.
+    Published at <a href="https://github.com/aviallon/hub-viallon">aviallon/hub-viallon</a>.
+  </footer>
+</main>
+</body>
+</html>
