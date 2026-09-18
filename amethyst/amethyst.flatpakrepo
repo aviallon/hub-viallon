@@ -1,0 +1,6 @@
+[Flatpak Repo]
+Title=Amethyst Mod Manager (viallon build)
+Url=https://aviallon.github.io/hub-viallon/amethyst/repo/
+DefaultBranch=stable
+Homepage=https://github.com/aviallon/Amethyst-Mod-Manager
+NoGpgVerify=true
