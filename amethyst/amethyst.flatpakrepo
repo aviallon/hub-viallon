@@ -1,5 +1,6 @@
 [Flatpak Repo]
-Title=Amethyst Mod Manager (aviallon build)
+Title=Amethyst Mod Manager (viallon build)
 Url=https://aviallon.github.io/hub-viallon/amethyst/repo/
-Comment=Personal build of Amethyst Mod Manager including the profile-clone fix
+DefaultBranch=stable
+Homepage=https://github.com/aviallon/Amethyst-Mod-Manager
 NoGpgVerify=true

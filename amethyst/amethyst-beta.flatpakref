@@ -1,0 +1,10 @@
+[Flatpak Ref]
+Name=io.github.Amethyst.ModManager
+Branch=beta
+Title=Amethyst Mod Manager (viallon build) (beta)
+Url=https://aviallon.github.io/hub-viallon/amethyst/repo/
+SuggestRemoteName=amethyst-aviallon
+Homepage=https://github.com/aviallon/Amethyst-Mod-Manager
+IsRuntime=false
+RuntimeRepo=https://dl.flathub.org/repo/flathub.flatpakrepo
+NoGpgVerify=true
