@@ -9,9 +9,17 @@ name: Publish Flatpak repository
 # lose delta updates and re-download every tree.
 #
 # Callers live in other repositories (see `on.workflow_call`). A called
-# workflow's jobs run inside the CALLER's run, so `actions/download-artifact`
-# sees the caller's artifacts. The caller's GITHUB_TOKEN only has write access to
-# the caller's repository, which is why pushing here needs `hub-token`.
+# workflow's jobs run inside the CALLER's run, so:
+#   * `actions/download-artifact` sees the CALLER's artifacts, and
+#   * the `github` context (including github.repository) refers to the CALLER -
+#     which is why the hub repository is an explicit input, not `github.repository`.
+#
+# Writing here needs a credential scoped to this repository: the caller's
+# GITHUB_TOKEN cannot write to another repository. We use an SSH deploy key
+# (`hub-deploy-key`), which is least-privilege and fully API-creatable:
+#   ssh-keygen -t ed25519 -f key -N '' -C '...'
+#   gh api -X POST repos/<hub>/keys -f title=... -f key="$(cat key.pub)" -f read_only=false
+#   gh secret set HUB_VIALLON_DEPLOY_KEY --repo <caller> < key
 
 on:
   workflow_call:
@@ -32,6 +40,10 @@ on:
         description: Directory under the Pages root holding this app's repository.
         required: true
         type: string
+      hub-repo:
+        description: '"owner/name" of THIS repository (the hub that is published to).'
+        required: true
+        type: string
       pages-branch:
         description: Git branch GitHub Pages serves.
         required: false
@@ -43,7 +55,7 @@ on:
         type: string
         default: ""
       title:
-        description: Human title for the .flatpakrepo file.
+        description: Human title for the enrolment files.
         required: false
         type: string
         default: Flatpak repository
@@ -52,19 +64,14 @@ on:
         required: false
         type: string
         default: ""
-      image:
-        description: Container image providing flatpak + ostree.
-        required: false
-        type: string
-        default: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
       dry-run:
         description: Publish to "<pages-branch>-dryrun" instead of the live branch.
         required: false
         type: boolean
         default: false
     secrets:
-      hub-token:
-        description: Token with contents:write on this repository (PAT or deploy key).
+      hub-deploy-key:
+        description: SSH deploy key with write access to hub-repo.
         required: true
 
 permissions:
@@ -74,14 +81,22 @@ jobs:
   publish:
     name: Publish ${{ inputs.app-id }} (${{ inputs.ostree-branch }})
     runs-on: ubuntu-latest
-    container:
-      image: ${{ inputs.image }}
     env:
       APP_ID: ${{ inputs.app-id }}
       OSTREE_BRANCH: ${{ inputs.ostree-branch }}
       PAGES_DIR: ${{ inputs.pages-dir }}
+      HUB_REPO: ${{ inputs.hub-repo }}
+      SUBJECT: ${{ inputs.subject }}
       TARGET_BRANCH: ${{ inputs.dry-run && format('{0}-dryrun', inputs.pages-branch) || inputs.pages-branch }}
     steps:
+      # No container: the publish path only needs flatpak/ostree, and running on
+      # the runner image keeps git + ssh available for the deploy-key push.
+      - name: Install flatpak and ostree
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends flatpak ostree
+
       - name: Download the built repository
         uses: actions/download-artifact@v4
         with:
@@ -89,25 +104,26 @@ jobs:
           path: newrepo
 
       - name: Check out the Pages branch
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ github.repository }}
-          ref: ${{ env.TARGET_BRANCH }}
-          path: site
-          token: ${{ secrets.hub-token }}
-          fetch-depth: 1
-        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          # HTTPS: the hub is public, so reading it needs no credential.
+          if git clone --depth 1 --branch "$TARGET_BRANCH" \
+               "https://github.com/${HUB_REPO}.git" site 2>/dev/null; then
+            echo "checked out existing branch $TARGET_BRANCH"
+          else
+            echo "branch $TARGET_BRANCH does not exist yet - starting a fresh one"
+            mkdir -p site
+            ( cd site && git init -q -b "$TARGET_BRANCH" )
+          fi
 
       - name: Ensure the OSTree skeleton
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p "site/${PAGES_DIR}/repo"
-          if [ ! -d site/.git ]; then
-            ( cd site && git init -q -b "$TARGET_BRANCH" )
-          fi
           cd "site/${PAGES_DIR}/repo"
-          # First publish: an archive-z2 repo is the format served over HTTPS.
+          # First publish: archive-z2 is the format served over plain HTTPS.
           [ -d objects ] || ostree --repo=. init --mode=archive-z2
           # git does not store empty directories, so a fresh checkout loses the
           # empty parts of the OSTree layout. Without recreating them, ostree
@@ -122,8 +138,7 @@ jobs:
         run: |
           set -euo pipefail
           REF="app/${APP_ID}/x86_64/${OSTREE_BRANCH}"
-          SUBJECT='${{ inputs.subject }}'
-          [ -n "$SUBJECT" ] || SUBJECT="$OSTREE_BRANCH"
+          COMMIT_SUBJECT="${SUBJECT:-$OSTREE_BRANCH}"
           # A stable publish lands on BOTH channels: the beta branch's contract
           # is "the newest release, beta or stable", so beta-tracking installs
           # see stables as ordinary updates instead of being stranded on the last
@@ -134,7 +149,7 @@ jobs:
             flatpak build-commit-from \
               --src-repo=newrepo \
               --src-ref="$REF" \
-              --subject="$SUBJECT" \
+              --subject="$COMMIT_SUBJECT" \
               "site/${PAGES_DIR}/repo" "app/${APP_ID}/x86_64/${BR}"
           done
           echo "targets=$TARGETS" >> "$GITHUB_OUTPUT"
@@ -151,47 +166,52 @@ jobs:
 
       - name: Write the enrolment files
         shell: bash
-        env:
-          PAGES_URL: ${{ format('https://{0}.github.io/{1}', github.repository_owner, github.event.repository.name) }}
-          HOMEPAGE: ${{ inputs.homepage }}
         run: |
           set -euo pipefail
+          OWNER="${HUB_REPO%%/*}"
+          NAME="${HUB_REPO##*/}"
+          PAGES_URL="https://${OWNER}.github.io/${NAME}"
           REPO_DIR="site/${PAGES_DIR}/repo"
           BASE="site/${PAGES_DIR}"
           URL="${PAGES_URL}/${PAGES_DIR}/repo/"
+          SLUG="$(basename "${PAGES_DIR}")"
+
           # Unsigned repository: NoGpgVerify tells flatpak not to expect
           # signatures. Verified to work with `flatpak remote-add --from`.
-          cat > "${BASE}/$(basename "${PAGES_DIR}").flatpakrepo" <<EOF
+          cat > "${BASE}/${SLUG}.flatpakrepo" <<EOF
           [Flatpak Repo]
           Title=${{ inputs.title }}
           Url=${URL}
           DefaultBranch=stable
-          Homepage=${HOMEPAGE}
+          Homepage=${{ inputs.homepage }}
           NoGpgVerify=true
           EOF
+
           # One-command install files, written only for branches that actually
-          # exist - a .flatpakref pointing at a missing branch errors at install
-          # time. Skip the stable file when it would just duplicate the repo file.
+          # exist: a .flatpakref pointing at a missing branch errors at install
+          # time.
           for BR in stable beta; do
             if ostree --repo="$REPO_DIR" refs | grep -qx "app/${APP_ID}/x86_64/${BR}"; then
               SUFFIX=""; [ "$BR" = "beta" ] && SUFFIX="-beta"
-              cat > "${BASE}/$(basename "${PAGES_DIR}")${SUFFIX}.flatpakref" <<EOF
+              cat > "${BASE}/${SLUG}${SUFFIX}.flatpakref" <<EOF
           [Flatpak Ref]
           Name=${APP_ID}
           Branch=${BR}
           Title=${{ inputs.title }} (${BR})
           Url=${URL}
           SuggestRemoteName=amethyst-aviallon
-          Homepage=${HOMEPAGE}
+          Homepage=${{ inputs.homepage }}
           IsRuntime=false
           RuntimeRepo=https://dl.flathub.org/repo/flathub.flatpakrepo
           NoGpgVerify=true
           EOF
             fi
           done
-          # Keep GitHub Pages from running Jekyll over the OSTree object dirs.
+
+          # Keep GitHub Pages from running Jekyll over the OSTree object dirs,
+          # whose filenames Jekyll would try to process.
           touch site/.nojekyll
-          ls -1 "$BASE"
+          echo "wrote:"; ls -1 "$BASE"
 
       # Fail loudly here rather than serving a broken remote: if OSTree cannot
       # read back what we just wrote, the publish is broken regardless of what
@@ -210,18 +230,26 @@ jobs:
           ostree --repo="$REPO_DIR" fsck --quiet
           echo "OSTree repo OK - all published refs present, fsck clean."
 
-      - name: Commit and push
+      - name: Commit and push with the deploy key
         shell: bash
+        env:
+          DEPLOY_KEY: ${{ secrets.hub-deploy-key }}
         run: |
           set -euo pipefail
+          KEY="$RUNNER_TEMP/deploy_key"
+          printf '%s\n' "$DEPLOY_KEY" > "$KEY"
+          chmod 600 "$KEY"
           cd site
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote remove origin 2>/dev/null || true
+          git remote add origin "ssh://git@github.com/${HUB_REPO}.git"
           git add -A
           if git diff --cached --quiet; then
             echo "Nothing to publish - repository already up to date."
             exit 0
           fi
-          git commit -q -m "${{ inputs.subject != '' && inputs.subject || inputs.ostree-branch }}"
-          git push -f origin "HEAD:refs/heads/${TARGET_BRANCH}"
+          git commit -q -m "${SUBJECT:-$OSTREE_BRANCH}"
+          git -c core.sshCommand="ssh -i $KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts" \
+            push -f origin "HEAD:refs/heads/${TARGET_BRANCH}"
           echo "pushed $(git rev-parse --short HEAD) to ${TARGET_BRANCH}"
